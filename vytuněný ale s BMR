@@ -1,0 +1,236 @@
+import tkinter as tk
+from tkinter import PhotoImage, ttk
+from PIL import Image, ImageTk  # Import Pillow for image-based emojis
+
+def start_app():
+    root = tk.Tk()
+    root.title("Fitness Aplikace")
+    root.geometry("600x500")
+    root.resizable(False, False)
+    root.configure(bg="#e0e0e0")
+
+    # Main frame for UI layout
+    main_frame = tk.Frame(root, bg="#f0f0f0", padx=20, pady=20)
+    main_frame.pack(expand=True, fill="both")
+
+    # Add logo
+    try:
+        logo = PhotoImage(file="appka/logo.png")
+        logo_label = tk.Label(main_frame, image=logo, bg="#f0f0f0")
+        logo_label.pack(pady=10)
+    except Exception as e:
+        print("Chyba při načítání loga:", e)
+
+    # Title with color emoji font
+    tk.Label(main_frame, text="🎉 Vítejte ve Fitness aplikaci!", font=("Segoe UI Emoji", 18, "bold"), bg="#f0f0f0", fg="#333").pack(pady=10)
+
+    start_button = tk.Button(main_frame, text="START", font=("Arial", 14, "bold"), bg="#4caf50", fg="white", command=lambda: open_form(root))
+    start_button.pack(pady=20)
+
+    root.mainloop()
+
+def show_error(message):
+    """ Displays an error message window """
+    error_window = tk.Toplevel()
+    error_window.title("Chyba")
+    error_window.geometry("400x200")
+    error_window.configure(bg="#f8d7da")
+
+    # Emoji title
+    tk.Label(error_window, text="⚠ Chyba!", font=("Segoe UI Emoji", 16, "bold"), bg="#f8d7da", fg="#721c24").pack(pady=10)
+    tk.Label(error_window, text=message, font=("Arial", 12), bg="#f8d7da", fg="#721c24").pack(pady=10)
+    
+    tk.Button(error_window, text="OK", font=("Arial", 12), bg="red", fg="white", command=error_window.destroy).pack(pady=10)
+
+def open_form(root):
+    """ Opens the user data entry form """
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    form_frame = tk.Frame(root, bg="#f0f0f0", padx=20, pady=20)
+    form_frame.pack(expand=True, fill="both")
+
+    tk.Label(form_frame, text="📝 Zadejte své údaje", font=("Segoe UI Emoji", 16, "bold"), bg="#f0f0f0").pack(pady=10)
+
+    entries = {}
+    fields = [("Jméno", "text"), ("Věk", "int"), ("Pohlaví (M/Ž)", "gender"), ("Váha (kg)", "float"), ("Výška (cm)", "float")]
+
+    for label, dtype in fields:
+        tk.Label(form_frame, text=label + ":", font=("Arial", 12), bg="#f0f0f0", anchor="w").pack(fill="x", padx=10)
+        entry = ttk.Entry(form_frame, font=("Arial", 12))
+        entry.pack(fill="x", padx=10, pady=5)
+        entries[label] = (entry, dtype)
+
+    def submit_data():
+        """ Validates and processes user input """
+        data = {}
+        for label, (entry, dtype) in entries.items():
+            value = entry.get().strip()
+
+            if not value:
+                show_error(f"Pole '{label}' nesmí být prázdné!")
+                return
+
+            if dtype == "text" and not value.isalpha():
+                show_error(f"Pole '{label}' smí obsahovat pouze písmena!")
+                return
+            if dtype == "int" and not value.isdigit():
+                show_error(f"Pole '{label}' musí obsahovat pouze celá čísla!")
+                return
+            if dtype == "gender" and value not in ["M", "Ž"]:
+                show_error("Pohlaví musí být 'M' nebo 'Ž'!")
+                return
+            if dtype == "float":
+                try:
+                    value = float(value.replace(",", "."))
+                except ValueError:
+                    show_error(f"Pole '{label}' musí být číslo!")
+                    return
+
+            data[label] = value
+
+        weight, height, age = data["Váha (kg)"], data["Výška (cm)"] / 100, int(data["Věk"])
+        bmi = weight / (height ** 2)
+        bmr = 10 * weight + 6.25 * (height * 100) - 5 * age + (5 if data["Pohlaví (M/Ž)"] == "M" else -161)
+
+        for widget in root.winfo_children():
+            widget.destroy()
+
+        ask_weight_change(root, data, bmr)
+
+    submit_button = tk.Button(form_frame, text="Pokračovat", font=("Arial", 14), bg="#4caf50", fg="white", command=submit_data)
+    submit_button.pack(pady=20)
+
+def ask_weight_change(root, data, bmr):
+    """ Asks the user about weight change and estimates calorie intake """
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    frame = tk.Frame(root, bg="#f0f0f0", padx=20, pady=20)
+    frame.pack(expand=True, fill="both")
+
+    tk.Label(frame, text="Jak se změnila vaše váha za poslední měsíc?", font=("Arial", 12), bg="#f0f0f0").pack(anchor="w", padx=20)
+
+    weight_change = tk.StringVar(value="Stejně")
+    options = [("Zhubl/a", "loss"), ("Přibral/a", "gain"), ("Zůstal/a stejně", "same")]
+
+    for text, value in options:
+        tk.Radiobutton(frame, text=text, variable=weight_change, value=value, bg="#f0f0f0").pack(anchor="w", padx=40)
+
+    def next_step():
+        change = weight_change.get()
+        if change == "same":
+            estimated_calories = bmr
+        else:
+            tk.Label(frame, text="Kolik kg jste změnil/a za poslední měsíc?", font=("Arial", 12), bg="#f0f0f0").pack(anchor="w", padx=20)
+            weight_entry = ttk.Entry(frame, font=("Arial", 12))
+            weight_entry.pack(fill="x", padx=20, pady=5)
+
+            def calculate_calories():
+                try:
+                    weight_diff = float(weight_entry.get().replace(",", "."))
+                    if change == "loss":
+                        estimated_calories = bmr - (weight_diff * 7700 / 30)
+                    else:
+                        estimated_calories = bmr + (weight_diff * 7700 / 30)
+
+                    show_goal_selection(root, estimated_calories)
+                except ValueError:
+                    show_error("Zadejte platnou hodnotu pro váhový rozdíl!")
+
+            tk.Button(frame, text="Potvrdit", font=("Arial", 12), bg="#4caf50", fg="white", command=calculate_calories).pack(pady=10)
+            return
+        
+        show_goal_selection(root, estimated_calories)
+
+    tk.Button(frame, text="Pokračovat", font=("Arial", 14), bg="#4caf50", fg="white", command=next_step).pack(pady=20)
+
+def show_goal_selection(root, estimated_calories):
+    """ Ukázat jejich denní příjem """
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    frame = tk.Frame(root, bg="#f0f0f0", padx=20, pady=20)
+    frame.pack(expand=True, fill="both")
+
+    tk.Label(frame, text=f"Vaše odhadovaná denní kalorická potřeba: {estimated_calories:.0f} kcal", font=("Arial", 12), bg="#f0f0f0").pack(pady=10)
+
+def show_goal_selection(root, estimated_calories):
+    """Ukáže možnosti cíle a reaguje na výběr uživatele"""
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    frame = tk.Frame(root, bg="#f0f0f0", padx=20, pady=20)
+    frame.pack(expand=True, fill="both")
+
+    tk.Label(frame, text=f"Vaše odhadovaná denní kalorická potřeba: {estimated_calories:.0f} kcal", 
+             font=("Arial", 12), bg="#f0f0f0").pack(pady=10)
+
+    tk.Label(frame, text="Jaký je váš cíl?", font=("Arial", 12), bg="#f0f0f0").pack(pady=10)
+
+    # Funkce pro zobrazení formuláře pro cíl hubnutí nebo přibírání
+    def ask_weight_goal(goal_type):
+        """ Zeptá se, kolik kg chce uživatel zhubnout/přibrat a za jak dlouho """
+        for widget in frame.winfo_children():
+            widget.destroy()
+
+        tk.Label(frame, text=f"Kolik kg chcete {'zhubnout' if goal_type == 'loss' else 'přibrat'}?", 
+                 font=("Arial", 12), bg="#f0f0f0").pack(pady=5)
+        weight_entry = ttk.Entry(frame, font=("Arial", 12))
+        weight_entry.pack(fill="x", padx=20, pady=5)
+
+        tk.Label(frame, text="Za kolik týdnů chcete dosáhnout cíle?", font=("Arial", 12), bg="#f0f0f0").pack(pady=5)
+        time_entry = ttk.Entry(frame, font=("Arial", 12))
+        time_entry.pack(fill="x", padx=20, pady=5)
+
+        def calculate_goal():
+            """ Vypočítá doporučený kalorický příjem na základě cíle """
+            try:
+                weight_diff = float(weight_entry.get().replace(",", "."))
+                weeks = int(time_entry.get())
+
+                if weeks < 4:  # Minimální doporučená doba pro zdravé hubnutí/přibírání
+                    show_error("Doporučujeme delší časový úsek pro zdravé tempo změny váhy.")
+                    return
+
+                calorie_adjustment = (weight_diff * 7700) / (weeks * 7)  # Denní kalorický rozdíl
+                new_calories = estimated_calories - calorie_adjustment if goal_type == "loss" else estimated_calories + calorie_adjustment
+
+                show_final_calories(root, new_calories, goal_type)
+            except ValueError:
+                show_error("Zadejte platné číslo pro váhu a počet týdnů!")
+
+        tk.Button(frame, text="Potvrdit", font=("Arial", 12), bg="#4caf50", fg="white", command=calculate_goal).pack(pady=10)
+
+    # Tlačítka pro výběr cíle
+    tk.Button(frame, text="Chci zhubnout", font=("Arial", 14), bg="blue", fg="white", 
+              command=lambda: ask_weight_goal("loss")).pack(pady=10)
+    
+    tk.Button(frame, text="Chci přibrat", font=("Arial", 14), bg="red", fg="white", 
+              command=lambda: ask_weight_goal("gain")).pack(pady=10)
+    
+    tk.Button(frame, text="Chci zůstat tak jsem", font=("Arial", 14), bg="green", fg="white", 
+              command=lambda: show_final_calories(root, estimated_calories, "maintain")).pack(pady=10)
+
+def show_final_calories(root, new_calories, goal_type):
+    """Zobrazí finální doporučený kalorický příjem na základě cíle uživatele"""
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    frame = tk.Frame(root, bg="#f0f0f0", padx=20, pady=20)
+    frame.pack(expand=True, fill="both")
+
+    goal_text = {
+        "loss": "Doporučený kalorický příjem pro hubnutí:",
+        "gain": "Doporučený kalorický příjem pro přibírání:",
+        "maintain": "Pro udržení váhy byste měli denně přijmout:"
+    }
+
+    tk.Label(frame, text=goal_text[goal_type], font=("Arial", 12), bg="#f0f0f0").pack(pady=10)
+    tk.Label(frame, text=f"{new_calories:.0f} kcal", font=("Arial", 16, "bold"), bg="#f0f0f0", fg="black").pack(pady=10)
+
+    tk.Button(frame, text="Dokončit", font=("Arial", 14), bg="#4caf50", fg="white", command=root.quit).pack(pady=20)
+
+
+if __name__ == "__main__":
+    start_app()
